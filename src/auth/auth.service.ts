@@ -26,17 +26,23 @@ export class AuthService {
   ) {}
 
   async register(registerSchoolDto: RegisterSchoolDto) {
+    // 1. Extract ALL necessary fields correctly
     const {
       adminEmail,
-      schoolName,
+      schoolName, // This is extracted
       password,
       adminFirstName,
       adminLastName,
       adminPhone,
-      ...schoolData
+      type,         // These must also be extracted individually
+      curricula,    // because they are required for the School schema
+      digitalAddress,
+      region,
+      city,
+      gesCode,      // This is optional, so it's okay
     } = registerSchoolDto;
 
-    // Check if School or Admin User already exists
+    // 2. Check if School or Admin User already exists
     const [existingSchool, existingUser] = await Promise.all([
       this.schoolModel.findOne({ schoolName }).exec(),
       this.userModel.findOne({ email: adminEmail }).exec(),
@@ -49,17 +55,23 @@ export class AuthService {
     if (existingUser)
       throw new ConflictException('A user with this email already exists.');
 
-    // Hash password
+    // 3. Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create School (Tenant)
+    // 4. Create School (Tenant) - MUST include all required fields explicitly
     const newSchool = await this.tenantService.create({
-      ...schoolData,
+      schoolName,      // Now explicitly included
+      type,            // Now explicitly included
+      curricula,       // Now explicitly included
+      digitalAddress,  // Now explicitly included
+      region,          // Now explicitly included
+      city,            // Now explicitly included
+      gesCode,         // Now explicitly included
       adminEmail,
       isVerified: false,
     });
 
-    // Create SUPER_ADMIN User
+    // 5. Create SUPER_ADMIN User
     const newUser = new this.userModel({
       firstName: adminFirstName,
       lastName: adminLastName,
@@ -67,19 +79,19 @@ export class AuthService {
       phone: adminPhone,
       password: hashedPassword,
       role: 'SUPER_ADMIN',
-      tenantId: newSchool._id.toString(),
+      tenantId: newSchool?._id?.toString(), // Remove optional chaining, it's safe now
       isActive: true,
     });
     await newUser.save();
 
-    // Generate and "Send" OTP
+    // 6. Generate and "Send" OTP
     const otp = this.generateOtp();
     this.otpStore.set(adminEmail, {
       code: otp,
       expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
     });
 
-    console.log(`OTP for ${adminEmail}: ${otp}`); // Replace with email/SMS service
+    console.log(`OTP for ${adminEmail}: ${otp}`);
 
     return {
       message:
@@ -87,7 +99,6 @@ export class AuthService {
       schoolId: newSchool._id,
     };
   }
-
   async verifyOtp(verifyOtpDto: VerifyOtpDto) {
     const { email, otpCode } = verifyOtpDto;
     const storedOtpData = this.otpStore.get(email);
@@ -113,10 +124,10 @@ export class AuthService {
 
     const user = await this.userModel.findOne({ email });
     const payload = {
-      email: user.email,
-      sub: user._id,
-      role: user.role,
-      tenantId: user.tenantId,
+      email: user?.email,
+      sub: user?._id,
+      role: user?.role,
+      tenantId: user?.tenantId,
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -125,11 +136,11 @@ export class AuthService {
       message: 'School verified successfully!',
       access_token,
       user: {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        id: user?._id,
+        email: user?.email,
+        role: user?.role,
+        firstName: user?.firstName,
+        lastName: user?.lastName,
       },
     };
   }
@@ -137,5 +148,4 @@ export class AuthService {
   private generateOtp(length: number = 6): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
-
 }

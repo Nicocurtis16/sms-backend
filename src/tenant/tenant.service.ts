@@ -6,7 +6,7 @@ import { School, SchoolDocument } from '../schemas/school.schema';
 @Injectable()
 export class TenantService {
   constructor(
-    @InjectModel(School.name) private schoolModel: Model<SchoolDocument>,
+    @InjectModel(School.name) private readonly schoolModel: Model<School>,
   ) {}
 
   async create(schoolData: Partial<School>): Promise<SchoolDocument> {
