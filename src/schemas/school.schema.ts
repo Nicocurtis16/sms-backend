@@ -24,7 +24,11 @@ export class School {
   @Prop({ required: true, type: String, enum: SchoolType })
   type: SchoolType;
 
-  @Prop({ type: [String], enum: CurriculumType, default: [CurriculumType.GES_STANDARD] })
+  @Prop({
+    type: [String],
+    enum: CurriculumType,
+    default: [CurriculumType.GES_STANDARD],
+  })
   curricula: CurriculumType[];
 
   @Prop({ required: true })

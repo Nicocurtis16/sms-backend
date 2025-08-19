@@ -12,7 +12,7 @@ import { TenantService } from '../tenant/tenant.service';
   imports: [
     MongooseModule.forFeature([
       { name: School.name, schema: SchoolSchema },
-      { name: User.name, schema: UserSchema }
+      { name: User.name, schema: UserSchema },
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

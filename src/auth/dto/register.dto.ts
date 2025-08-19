@@ -1,4 +1,13 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MinLength, IsPhoneNumber } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
+  IsPhoneNumber,
+} from 'class-validator';
 import { SchoolType, CurriculumType } from '../../schemas/school.schema';
 
 export class RegisterSchoolDto {

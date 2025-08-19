@@ -1,17 +1,22 @@
-import { Injectable, ConflictException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { RegisterSchoolDto } from './dto/register.dto';
-import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { School, SchoolDocument } from '../schemas/school.schema';
 import { User, UserDocument } from '../schemas/user.schema';
 import { TenantService } from '../tenant/tenant.service';
+import { VerifyOtpDto } from './dto/verify-otp.dts';
 
 @Injectable()
 export class AuthService {
-  private otpStore: Map<string, { code: string; expiresAt: number }> = new Map();
+  private otpStore: Map<string, { code: string; expiresAt: number }> =
+    new Map();
 
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
@@ -21,7 +26,15 @@ export class AuthService {
   ) {}
 
   async register(registerSchoolDto: RegisterSchoolDto) {
-    const { adminEmail, schoolName, password, adminFirstName, adminLastName, adminPhone, ...schoolData } = registerSchoolDto;
+    const {
+      adminEmail,
+      schoolName,
+      password,
+      adminFirstName,
+      adminLastName,
+      adminPhone,
+      ...schoolData
+    } = registerSchoolDto;
 
     // Check if School or Admin User already exists
     const [existingSchool, existingUser] = await Promise.all([
@@ -29,8 +42,12 @@ export class AuthService {
       this.userModel.findOne({ email: adminEmail }).exec(),
     ]);
 
-    if (existingSchool) throw new ConflictException('A school with this name is already registered.');
-    if (existingUser) throw new ConflictException('A user with this email already exists.');
+    if (existingSchool)
+      throw new ConflictException(
+        'A school with this name is already registered.',
+      );
+    if (existingUser)
+      throw new ConflictException('A user with this email already exists.');
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -59,13 +76,14 @@ export class AuthService {
     const otp = this.generateOtp();
     this.otpStore.set(adminEmail, {
       code: otp,
-      expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
     });
 
     console.log(`OTP for ${adminEmail}: ${otp}`); // Replace with email/SMS service
 
     return {
-      message: 'School registered successfully. Please check your email for the verification OTP.',
+      message:
+        'School registered successfully. Please check your email for the verification OTP.',
       schoolId: newSchool._id,
     };
   }
@@ -82,8 +100,11 @@ export class AuthService {
       throw new BadRequestException('Invalid OTP.');
     }
 
-    const schoolToVerify = await this.schoolModel.findOne({ adminEmail: email });
-    if (!schoolToVerify) throw new BadRequestException('School not found for this email.');
+    const schoolToVerify = await this.schoolModel.findOne({
+      adminEmail: email,
+    });
+    if (!schoolToVerify)
+      throw new BadRequestException('School not found for this email.');
 
     schoolToVerify.isVerified = true;
     await schoolToVerify.save();
@@ -95,7 +116,7 @@ export class AuthService {
       email: user.email,
       sub: user._id,
       role: user.role,
-      tenantId: user.tenantId
+      tenantId: user.tenantId,
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -108,7 +129,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
       },
     };
   }
@@ -117,6 +138,4 @@ export class AuthService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  // Add your login method here later
-  // async login(loginDto: LoginDto) { ... }
 }
