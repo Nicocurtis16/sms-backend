@@ -18,15 +18,18 @@ import { ResendOtpDto } from './dto/resend-opt.dto';
 
 @Injectable()
 export class AuthService {
-  private otpStore: Map<string, { code: string; expiresAt: number }> =
-    new Map();
+  private otpStore: Map<string, { code: string; expiresAt: number }> = new Map();
+  private readonly loginUrl = 'https://your-sms-platform.com/auth/login'; // Update with your actual URL
+  private readonly maxResendAttempts = 3;
+  private readonly resendCooldownMinutes = 15;
+  private resendAttempts: Map<string, { count: number; lastAttempt: number }> = new Map();
 
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(School.name) private schoolModel: Model<SchoolDocument>,
     private jwtService: JwtService,
     private tenantService: TenantService,
-    private readonly mailerService: MailerService, // Inject mailer service
+    private readonly mailerService: MailerService,
   ) {}
 
   async register(registerSchoolDto: RegisterSchoolDto) {
@@ -52,9 +55,7 @@ export class AuthService {
     ]);
 
     if (existingSchool) {
-      throw new ConflictException(
-        'A school with this name is already registered.',
-      );
+      throw new ConflictException('A school with this name is already registered.');
     }
     if (existingUser) {
       throw new ConflictException('A user with this email already exists.');
@@ -89,21 +90,18 @@ export class AuthService {
     });
     await newUser.save();
 
-    // Generate and Send OTP via Email
+    // Generate and Send Initial Verification Email
     try {
-      await this.sendOtpEmail(adminEmail, adminFirstName, schoolName);
+      await this.sendOtpEmail(adminEmail, adminFirstName, schoolName, false);
     } catch (error) {
       // If email fails, clean up the created school and user
       await this.schoolModel.findByIdAndDelete(newSchool._id).exec();
       await this.userModel.findByIdAndDelete(newUser._id).exec();
-      throw new InternalServerErrorException(
-        'Could not send verification email. Please try again.',
-      );
+      throw new InternalServerErrorException('Could not send verification email. Please try again.');
     }
 
     return {
-      message:
-        'School registered successfully. Please check your email for the verification OTP.',
+      message: 'School registered successfully. Please check your email for the verification OTP.',
       schoolId: newSchool._id,
     };
   }
@@ -120,9 +118,7 @@ export class AuthService {
       throw new BadRequestException('Invalid OTP.');
     }
 
-    const schoolToVerify = await this.schoolModel.findOne({
-      adminEmail: email,
-    });
+    const schoolToVerify = await this.schoolModel.findOne({ adminEmail: email });
     if (!schoolToVerify) {
       throw new BadRequestException('School not found for this email.');
     }
@@ -130,7 +126,9 @@ export class AuthService {
     schoolToVerify.isVerified = true;
     await schoolToVerify.save();
 
+    // Clear OTP and resend attempts
     this.otpStore.delete(email);
+    this.resendAttempts.delete(email);
 
     const user = await this.userModel.findOne({ email });
     const payload = {
@@ -141,6 +139,13 @@ export class AuthService {
     };
 
     const access_token = this.jwtService.sign(payload);
+
+    // Send Welcome Email after successful verification
+    try {
+await this.sendWelcomeEmail(email, user?.firstName ?? '', schoolToVerify.schoolName);    } catch (error) {
+      // Log the error but don't fail the verification process
+      console.error('Failed to send welcome email:', error);
+    }
 
     return {
       message: 'School verified successfully!',
@@ -155,7 +160,6 @@ export class AuthService {
     };
   }
 
-  // NEW: Resend OTP endpoint logic
   async resendOtp(resendOtpDto: ResendOtpDto) {
     const { email } = resendOtpDto;
 
@@ -170,41 +174,72 @@ export class AuthService {
       throw new BadRequestException('School is already verified.');
     }
 
-    // Resend OTP email
+    // Check resend attempts and cooldown
+    const attemptData = this.resendAttempts.get(email) || { count: 0, lastAttempt: 0 };
+    const now = Date.now();
+    const cooldownExpired = now - attemptData.lastAttempt > this.resendCooldownMinutes * 60 * 1000;
+
+    if (attemptData.count >= this.maxResendAttempts && !cooldownExpired) {
+      const minutesLeft = Math.ceil((attemptData.lastAttempt + (this.resendCooldownMinutes * 60 * 1000) - now) / 60000);
+      throw new BadRequestException(`Too many resend attempts. Please try again in ${minutesLeft} minutes.`);
+    }
+
+    // Reset counter if cooldown expired
+    if (cooldownExpired) {
+      attemptData.count = 0;
+    }
+
+    attemptData.count++;
+    attemptData.lastAttempt = now;
+    this.resendAttempts.set(email, attemptData);
+
+    // Resend OTP email with resend template
     try {
-      await this.sendOtpEmail(email, user.firstName, school?.schoolName ?? '');
-      return {
-        message: 'OTP has been resent successfully. Please check your email.',
-      };
+await this.sendOtpEmail(email, user.firstName ?? '', school?.schoolName ?? '', true);      return { message: 'New verification code has been sent to your email.' };
     } catch (error) {
-      throw new InternalServerErrorException(
-        'Failed to resend OTP. Please try again.',
-      );
+      throw new InternalServerErrorException('Failed to send verification code. Please try again.');
     }
   }
 
-  // NEW: Private method to send OTP email (reusable)
-  private async sendOtpEmail(
-    email: string,
-    firstName: string,
-    schoolName: string,
-  ) {
+  private async sendOtpEmail(email: string, firstName: string, schoolName: string, isResend: boolean = false) {
     const otp = this.generateOtp();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
-    // Store OTP in memory (use Redis in production)
+    // Store OTP in memory
     this.otpStore.set(email, { code: otp, expiresAt });
+
+    // Choose template and subject based on resend or initial
+    const template = isResend ? './resend-verification' : './initial-verification';
+    const subject = isResend
+      ? `New Verification Code - ${schoolName}`
+      : `Verify Your Account - ${schoolName}`;
 
     // Send email
     await this.mailerService.sendMail({
       to: email,
-      subject: `Verify Your Account - ${schoolName}`,
-      template: './otp', // Points to src/mail/templates/otp.hbs
+      subject: subject,
+      template: template,
       context: {
         firstName,
         schoolName,
         otpCode: otp,
         currentYear: new Date().getFullYear(),
+        loginUrl: this.loginUrl,
+      },
+    });
+  }
+
+  private async sendWelcomeEmail(email: string, firstName: string, schoolName: string) {
+    await this.mailerService.sendMail({
+      to: email,
+      subject: `Welcome to ${schoolName}!`,
+      template: './welcome',
+      context: {
+        firstName,
+        schoolName,
+        currentYear: new Date().getFullYear(),
+        loginUrl: this.loginUrl,
+        supportEmail: 'support@yoursmsplatform.com',
       },
     });
   }
