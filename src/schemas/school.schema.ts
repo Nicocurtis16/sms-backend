@@ -51,6 +51,48 @@ export class School {
 
   @Prop({ type: Object, default: {} })
   settings: Record<string, any>;
+
+  @Prop()
+  logoUrl?: string;
+
+  @Prop()
+  description?: string;
+
+  @Prop()
+  contactEmail?: string;
+
+  @Prop()
+  contactPhone?: string;
+
+  @Prop()
+  websiteUrl?: string;
+
+  @Prop({ type: Object, default: {} })
+  socials?: {
+    facebook?: string;
+    twitter?: string;
+    instagram?: string;
+    linkedin?: string;
+  };
+
+  @Prop({
+    type: [
+      {
+        day: { type: String },
+        open: { type: String },
+        close: { type: String },
+      },
+    ],
+    default: [],
+  })
+  operatingHours?: Array<{
+    day: string;
+    open: string;
+    close: string;
+  }>;
+
+  @Prop({ default: false })
+  profileCompleted?: boolean;
 }
 
 export const SchoolSchema = SchemaFactory.createForClass(School);
