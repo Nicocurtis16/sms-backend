@@ -10,6 +10,7 @@ import { TenantModule } from './tenant/tenant.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SchoolModule } from './school/school.module';
 import { StaffModule } from './staff/staff.module';
+import { AcademicModule } from './academic/academic.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { StaffModule } from './staff/staff.module';
     DashboardModule,
     SchoolModule,
     StaffModule,
+    AcademicModule,
   ],
 })
 export class AppModule {}
