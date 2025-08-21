@@ -37,6 +37,12 @@ export class User {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  @Prop({ default: 0 })
+  tokenVersion: number;
+
+  @Prop({ type: Date, default: null })
+  passwordChangedAt: Date | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

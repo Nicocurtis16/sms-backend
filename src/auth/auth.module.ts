@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { School, SchoolSchema } from '../schemas/school.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { TenantService } from '../tenant/tenant.service';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -24,7 +25,7 @@ import { TenantService } from '../tenant/tenant.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, TenantService],
+  providers: [AuthService, TenantService, JwtAuthGuard],
   exports: [AuthService],
 })
 export class AuthModule {}
